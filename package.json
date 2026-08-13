@@ -1,0 +1,11 @@
+{
+  "name": "sdk-ads-platform",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build:sdk": "npm run build --workspace=@sdk-ads/sdk"
+  }
+}
