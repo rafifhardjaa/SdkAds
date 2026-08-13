@@ -6,6 +6,8 @@
     "packages/*"
   ],
   "scripts": {
-    "build:sdk": "npm run build --workspace=@sdk-ads/sdk"
+    "build:sdk": "npm run build --workspace=@sdk-ads/sdk",
+    "build:backend": "npm run build --workspace=@sdk-ads/backend",
+    "start:backend": "npm run start --workspace=@sdk-ads/backend"
   }
 }
