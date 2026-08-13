@@ -3,28 +3,106 @@ export interface SDKConfig {
   developerKey?: string;
   debug?: boolean;
   adDuration?: number; // duration in seconds, default 5
+  apiBaseUrl?: string; // backend API base URL, default http://localhost:3000
 }
+
+interface ServerAdConfig {
+  gameId: string;
+  adDuration: number;
+  placementId: string;
+}
+
+const DEFAULT_API_BASE_URL = 'http://localhost:3000';
 
 export class GendisSDKClass {
   private isInitialized = false;
   private config: SDKConfig | null = null;
+  private serverAdConfig: ServerAdConfig | null = null;
   private styleElement: HTMLStyleElement | null = null;
 
-  public init(config: SDKConfig): void {
+  public async init(config: SDKConfig): Promise<void> {
     if (this.isInitialized) {
       console.warn('[GendisSDK] SDK already initialized.');
       return;
     }
     this.config = {
       adDuration: 5, // default 5 seconds
+      apiBaseUrl: DEFAULT_API_BASE_URL,
       ...config
     };
-    this.isInitialized = true;
-    
+
     this.injectStyles();
+
+    try {
+      await this.fetchServerConfig();
+    } catch (error) {
+      console.warn(
+        `[GendisSDK] Failed to fetch ad config from backend. Falling back to defaults.`,
+        error
+      );
+    }
+
+    this.isInitialized = true;
 
     if (this.config.debug) {
       console.log('[GendisSDK] Initialized with config:', this.config);
+    }
+  }
+
+  private async fetchServerConfig(): Promise<void> {
+    if (typeof fetch === 'undefined') return;
+
+    const { gameId, apiBaseUrl, developerKey } = this.config as SDKConfig;
+    const url = `${apiBaseUrl}/api/config?gameId=${encodeURIComponent(gameId)}`;
+
+    const headers: Record<string, string> = {};
+    if (developerKey) {
+      headers['Authorization'] = `Bearer ${developerKey}`;
+    }
+
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      throw new Error(`Config request failed with status ${res.status}`);
+    }
+
+    const data: ServerAdConfig = await res.json();
+    this.serverAdConfig = data;
+
+    if (this.config?.debug) {
+      console.log('[GendisSDK] Server ad config:', data);
+    }
+  }
+
+  private async sendTelemetry(type: string): Promise<void> {
+    if (typeof fetch === 'undefined') return;
+    if (!this.config) return;
+
+    const { gameId, apiBaseUrl, developerKey } = this.config;
+    const placementId = this.serverAdConfig?.placementId ?? 'pre-roll';
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (developerKey) {
+      headers['Authorization'] = `Bearer ${developerKey}`;
+    }
+
+    try {
+      await fetch(`${apiBaseUrl}/api/telemetry`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          gameId,
+          type,
+          placementId,
+          timestamp: Date.now(),
+        }),
+      });
+      if (this.config.debug) {
+        console.log(`[GendisSDK] Telemetry event sent: ${type}`);
+      }
+    } catch (error) {
+      console.warn(`[GendisSDK] Failed to send telemetry event ${type}:`, error);
     }
   }
 
@@ -174,8 +252,11 @@ export class GendisSDKClass {
       return;
     }
 
-    const duration = this.config?.adDuration || 5;
+    const duration = this.serverAdConfig?.adDuration ?? this.config?.adDuration ?? 5;
     let timeLeft = duration;
+
+    // Record impression event
+    void this.sendTelemetry('IMPRESSION');
 
     // Create Overlay elements
     const overlay = document.createElement('div');
@@ -199,22 +280,22 @@ export class GendisSDKClass {
     // Content area (with a beautiful placeholder)
     const content = document.createElement('div');
     content.className = 'gendis-ad-content';
-    
+
     const placeholder = document.createElement('div');
     placeholder.className = 'gendis-ad-placeholder';
-    
+
     const logo = document.createElement('div');
     logo.className = 'gendis-ad-logo';
     logo.textContent = '🎮';
-    
+
     const text = document.createElement('div');
     text.className = 'gendis-ad-text';
     text.textContent = 'Open Developer Network';
-    
+
     const subtext = document.createElement('div');
     subtext.className = 'gendis-ad-subtext';
     subtext.textContent = 'Sponsor Ads — Game loading shortly...';
-    
+
     placeholder.appendChild(logo);
     placeholder.appendChild(text);
     placeholder.appendChild(subtext);
@@ -263,6 +344,8 @@ export class GendisSDKClass {
       if (document.body.contains(overlay)) {
         document.body.removeChild(overlay);
       }
+      // Record click event
+      void this.sendTelemetry('CLICK');
       if (this.config?.debug) {
         console.log('[GendisSDK] Pre-Roll Ad completed and overlay removed.');
       }

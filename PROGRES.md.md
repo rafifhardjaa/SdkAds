@@ -17,6 +17,13 @@
 - [x] Endpoint `GET /health` health check.
 - [x] Verifikasi server berjalan & response endpoint benar (build via tsup, CJS 2.46 KB).
 
+### SDK-Backend Integration Phase
+- [x] `init()` kini async: fetch konfigurasi dari `GET /api/config?gameId=...` (fallback ke default jika gagal).
+- [x] Opsi baru `apiBaseUrl` di `SDKConfig` (default `http://localhost:3000`).
+- [x] `showPreRoll()` mengirim telemetry `IMPRESSION` saat iklan tampil & `CLICK` saat tombol skip/start diklik.
+- [x] Header `Authorization: Bearer <developerKey>` otomatis dikirim jika `developerKey` di-set.
+- [x] Verifikasi unit (mock fetch/DOM) & E2E terhadap backend live — config terambil, telemetry diterima server.
+- [x] Bundle SDK tetap ringan: `sdk.min.js` = 7.23 KB (< 8 KB).
+
 ### Next Tasks
-- [ ] Integrasi Frontend SDK dengan Backend API (fetch `/api/config` & kirim telemetry ke `/api/telemetry`).
-- [ ] Penambahan dukungan multi-tenant developer key (auth header).
+- [ ] Penambahan dukungan multi-tenant developer key (auth header) penuh di backend (validasi per key).
