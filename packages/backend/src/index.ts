@@ -2,6 +2,7 @@ import express, { Express, Response } from 'express';
 import cors from 'cors';
 import { authenticateDeveloper, AuthenticatedRequest } from './middleware';
 import { findGameForDeveloper } from './store';
+import { getStats, recordEvent } from './telemetry';
 
 interface TelemetryEvent {
   gameId?: string;
@@ -51,9 +52,22 @@ app.post('/api/telemetry', authenticateDeveloper, (req: AuthenticatedRequest, re
     timestamp: body.timestamp || Date.now(),
   };
 
+  recordEvent(event);
   console.log('[telemetry]', JSON.stringify(event));
 
   res.status(201).json({ status: 'received', event });
+});
+
+app.get('/api/stats', authenticateDeveloper, (req: AuthenticatedRequest, res: Response) => {
+  const developer = req.developer!;
+  const gameId = req.query.gameId ? String(req.query.gameId) : undefined;
+
+  if (gameId && !findGameForDeveloper(developer, gameId)) {
+    res.status(404).json({ error: 'Game not found', gameId });
+    return;
+  }
+
+  res.json(getStats(developer.id, gameId));
 });
 
 const PORT = Number(process.env.PORT || 3000);

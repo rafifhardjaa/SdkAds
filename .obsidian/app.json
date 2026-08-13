@@ -1,6 +1,4 @@
 {
   "promptDelete": false,
-  "userIgnoreFilters": [
-    "node_modules/"
-  ]
+  "userIgnoreFilters": null
 }

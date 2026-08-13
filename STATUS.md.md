@@ -1,11 +1,11 @@
 # Project Status
 
 ## Current Phase
-**Phase 4: Multi-Tenant Auth & Developer Key**
+**Phase 5: Telemetry Persistence & Stats**
 
 ## Status Summary
 - **Vault Setup:** Obsidian Vault `SdkAds` telah diinisialisasi dengan struktur memori AI (README, STATUS, PROGRESS, DECISION).
-- **Current Focus:** Backend API kini memiliki middleware auth developer key (Bearer) — `/api/config` & `/api/telemetry` terproteksi, event telemetri ditandai `developerId`. Terverifikasi 7 skenario.
+- **Current Focus:** Telemetry IMPRESSION & CLICK kini disimpan di store terstruktur (`telemetry.ts`), dengan endpoint `GET /api/stats` untuk ringkasan statistik per developer/game (impressions, clicks, CTR). Terverifikasi end-to-end.
 - **Active Blockers:** Tidak ada.
 
 ## Next Milestones
@@ -14,4 +14,5 @@
 3. Setup Backend API sederhana untuk menyajikan konfig iklan & menerima telemetry event. (Selesai - Express + CORS di `packages/backend`)
 4. Integrasi Frontend SDK dengan Backend API (fetch config & kirim telemetry ke endpoint). (Selesai - Terverifikasi E2E, SDK 7.23 KB < 8KB)
 5. Dukungan multi-tenant developer key (auth header) di backend. (Selesai - Middleware Bearer, store in-memory, validasi game per developer)
-6. Setup basis data telemetry (mis. Redis/PostgreSQL) & dashboard stats real-time. (Berikutnya)
+6. Setup basis data telemetry & endpoint `GET /api/stats`. (Selesai - In-memory store terstruktur, stats per developer/game, CTR)
+7. Migrasi store ke database persistent (Redis/PostgreSQL/SQLite) & dashboard real-time. (Berikutnya)

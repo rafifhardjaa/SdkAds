@@ -26,7 +26,15 @@
 - [x] Bundle SDK tetap ringan: `sdk.min.js` = 7.23 KB (< 8 KB).
 
 ### Next Tasks
-- [ ] Setup basis data telemetry (Redis/PostgreSQL) & dashboard stats real-time.
+- [ ] Migrasi store telemetry ke database persistent (Redis/PostgreSQL/SQLite) & dashboard stats real-time.
+
+### Telemetry Persistence & Stats Phase
+- [x] `packages/backend/src/telemetry.ts`: in-memory store terstruktur untuk event telemetri (`recordEvent`, `getStats`).
+- [x] `POST /api/telemetry` kini merekam event IMPRESSION & CLICK ke store (bukan hanya log).
+- [x] Endpoint `GET /api/stats` (terproteksi) mengembalikan ringkasan: `totalImpressions`, `totalClicks`, `ctr`, breakdown per game.
+- [x] Dukungan filter `?gameId=...` di `/api/stats` dengan validasi kepemilikan game.
+- [x] Verifikasi E2E: 3 IMPRESSION + 1 CLICK → stats total 3/1, CTR 0.333; auth 401 tanpa key; game asing 404.
+- [x] Build backend CJS 4.99 KB.
 
 ### Multi-Tenant Auth Phase
 - [x] `packages/backend/src/store.ts`: store developer & game in-memory (multi-tenant), lookup by `apiKey`.
