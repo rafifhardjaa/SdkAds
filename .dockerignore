@@ -1,0 +1,12 @@
+node_modules/
+packages/*/node_modules/
+packages/*/dist/
+packages/backend/data/
+data/
+.git/
+.obsidian/
+*.md.md
+*.log
+.dockerignore
+Dockerfile
+docker-compose.yml

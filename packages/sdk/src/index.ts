@@ -12,13 +12,20 @@ interface ServerAdConfig {
   placementId: string;
 }
 
+interface BoundPlayButton {
+  element: HTMLElement;
+  handler: (e: Event) => void;
+}
+
 const DEFAULT_API_BASE_URL = 'http://localhost:3000';
+const CONFIG_FETCH_TIMEOUT_MS = 4000;
 
 export class GendisSDKClass {
   private isInitialized = false;
   private config: SDKConfig | null = null;
   private serverAdConfig: ServerAdConfig | null = null;
   private styleElement: HTMLStyleElement | null = null;
+  private boundPlayButtons: BoundPlayButton[] = [];
 
   public async init(config: SDKConfig): Promise<void> {
     if (this.isInitialized) {
@@ -49,6 +56,24 @@ export class GendisSDKClass {
     }
   }
 
+  /**
+   * Tears down the SDK: removes injected styles, un-binds play buttons,
+   * and clears any active ad overlay / timers to prevent memory leaks in
+   * the host game engine. Safe to call multiple times.
+   */
+  public destroy(): void {
+    const wasDebug = this.config?.debug === true;
+    this.removeStyles();
+    this.unbindPlayButtons();
+    this.clearActiveAd();
+    this.isInitialized = false;
+    this.config = null;
+    this.serverAdConfig = null;
+    if (wasDebug) {
+      console.log('[GendisSDK] SDK destroyed.');
+    }
+  }
+
   private async fetchServerConfig(): Promise<void> {
     if (typeof fetch === 'undefined') return;
 
@@ -60,25 +85,44 @@ export class GendisSDKClass {
       headers['Authorization'] = `Bearer ${developerKey}`;
     }
 
-    const res = await fetch(url, { headers });
-    if (!res.ok) {
-      throw new Error(`Config request failed with status ${res.status}`);
-    }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), CONFIG_FETCH_TIMEOUT_MS);
 
-    const data: ServerAdConfig = await res.json();
-    this.serverAdConfig = data;
+    try {
+      const res = await fetch(url, { headers, signal: controller.signal });
+      if (!res.ok) {
+        throw new Error(`Config request failed with status ${res.status}`);
+      }
 
-    if (this.config?.debug) {
-      console.log('[GendisSDK] Server ad config:', data);
+      const data: ServerAdConfig = await res.json();
+      this.serverAdConfig = data;
+
+      if (this.config?.debug) {
+        console.log('[GendisSDK] Server ad config:', data);
+      }
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
-  private async sendTelemetry(type: string): Promise<void> {
-    if (typeof fetch === 'undefined') return;
+  /**
+   * Non-blocking telemetry send. Prefers `navigator.sendBeacon` (fire & forget,
+   * survives page unload), falls back to `fetch` with keepalive when beacon is
+   * unavailable or rejected (e.g. blocked by an AdBlocker). Never throws and
+   * never blocks the caller.
+   */
+  private sendTelemetry(type: string): void {
     if (!this.config) return;
 
     const { gameId, apiBaseUrl, developerKey } = this.config;
     const placementId = this.serverAdConfig?.placementId ?? 'pre-roll';
+
+    const payload = JSON.stringify({
+      gameId,
+      type,
+      placementId,
+      timestamp: Date.now(),
+    });
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -87,23 +131,46 @@ export class GendisSDKClass {
       headers['Authorization'] = `Bearer ${developerKey}`;
     }
 
-    try {
-      await fetch(`${apiBaseUrl}/api/telemetry`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          gameId,
-          type,
-          placementId,
-          timestamp: Date.now(),
-        }),
-      });
-      if (this.config.debug) {
-        console.log(`[GendisSDK] Telemetry event sent: ${type}`);
+    const url = `${apiBaseUrl}/api/telemetry`;
+
+    // 1. Prefer sendBeacon — non-blocking and delivered on page unload.
+    if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+      try {
+        const blob = new Blob([payload], { type: 'application/json' });
+        if (navigator.sendBeacon(url, blob)) {
+          if (this.config.debug) {
+            console.log(`[GendisSDK] Telemetry event sent (beacon): ${type}`);
+          }
+          return;
+        }
+        // Beacon rejected (e.g. quota / blocked) → fall through to fetch.
+      } catch (error) {
+        if (this.config.debug) {
+          console.warn(`[GendisSDK] sendBeacon failed for ${type}, falling back to fetch:`, error);
+        }
       }
-    } catch (error) {
-      console.warn(`[GendisSDK] Failed to send telemetry event ${type}:`, error);
     }
+
+    // 2. Fallback: fire & forget fetch with keepalive, abort on AdBlock/network hang.
+    if (typeof fetch === 'undefined') return;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+    void fetch(url, {
+      method: 'POST',
+      headers,
+      body: payload,
+      keepalive: true,
+      signal: controller.signal,
+    })
+      .catch((error: unknown) => {
+        // AdBlocker / network failure — telemetry must never break the game.
+        if (this.config?.debug) {
+          console.warn(`[GendisSDK] Telemetry ${type} not delivered:`, error);
+        }
+      })
+      .finally(() => clearTimeout(timeoutId));
   }
 
   private injectStyles(): void {
@@ -111,121 +178,49 @@ export class GendisSDKClass {
     if (this.styleElement) return;
 
     const css = `
-      .gendis-ad-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background-color: rgba(10, 10, 12, 0.95);
-        z-index: 999999;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        color: #f3f4f6;
-        user-select: none;
-      }
-      .gendis-ad-modal {
-        background: #111827;
-        border: 1px solid #1f2937;
-        border-radius: 16px;
-        width: 90%;
-        max-width: 560px;
-        padding: 24px;
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.5);
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-      }
-      .gendis-ad-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-      .gendis-ad-title {
-        font-size: 14px;
-        font-weight: 600;
-        color: #9ca3af;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-      .gendis-ad-badge {
-        background-color: #374151;
-        color: #f3f4f6;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 11px;
-        font-weight: 700;
-      }
-      .gendis-ad-content {
-        position: relative;
-        width: 100%;
-        height: 280px;
-        background-color: #030712;
-        border-radius: 8px;
-        overflow: hidden;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border: 1px solid #374151;
-      }
-      .gendis-ad-placeholder {
-        text-align: center;
-        padding: 16px;
-      }
-      .gendis-ad-logo {
-        font-size: 36px;
-        margin-bottom: 8px;
-        animation: pulse 2s infinite ease-in-out;
-      }
-      @keyframes pulse {
-        0%, 100% { transform: scale(1); opacity: 0.8; }
-        50% { transform: scale(1.05); opacity: 1; }
-      }
-      .gendis-ad-text {
-        font-size: 18px;
-        font-weight: 700;
-        color: #3b82f6;
-        margin-bottom: 4px;
-      }
-      .gendis-ad-subtext {
-        font-size: 12px;
-        color: #6b7280;
-      }
-      .gendis-ad-footer {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-      .gendis-ad-timer {
-        font-size: 13px;
-        color: #9ca3af;
-      }
-      .gendis-ad-button {
-        background-color: #3b82f6;
-        color: #ffffff;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 6px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background-color 0.15s ease-in-out;
-      }
-      .gendis-ad-button:hover:not(:disabled) {
-        background-color: #2563eb;
-      }
-      .gendis-ad-button:disabled {
-        background-color: #1f2937;
-        color: #4b5563;
-        cursor: not-allowed;
-      }
+      .gendis-ad-overlay{position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;user-select:none;padding:16px}
+      .gendis-ad-modal{background:#18181B;border:1px solid #27272A;border-radius:8px;width:100%;max-width:520px;padding:24px;display:flex;flex-direction:column;gap:16px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+      .gendis-ad-header{display:flex;justify-content:space-between;align-items:center}
+      .gendis-ad-title{font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#A1A1AA}
+      .gendis-ad-badge{background:rgba(16,185,129,.12);color:#10B981;border:1px solid rgba(16,185,129,.35);border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+      .gendis-ad-content{position:relative;height:220px;background:#09090B;border:1px solid #27272A;border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+      .gendis-ad-placeholder{text-align:center;padding:16px}
+      .gendis-ad-logo{font-size:36px;margin-bottom:10px}
+      .gendis-ad-text{font-size:18px;font-weight:700;color:#FAFAFA;margin-bottom:4px}
+      .gendis-ad-subtext{font-size:13px;color:#A1A1AA}
+      .gendis-ad-footer{display:flex;justify-content:space-between;align-items:center;gap:12px}
+      .gendis-ad-timer{font-size:13px;color:#A1A1AA;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+      .gendis-ad-button{background:#FAFAFA;border:1px solid #27272A;border-radius:6px;color:#09090B;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .15s ease,opacity .15s ease}
+      .gendis-ad-button:hover:not(:disabled){background:#E4E4E7}
+      .gendis-ad-button:disabled{background:#18181B;color:#52525B;cursor:not-allowed}
     `;
 
     this.styleElement = document.createElement('style');
     this.styleElement.textContent = css;
     document.head.appendChild(this.styleElement);
+  }
+
+  private removeStyles(): void {
+    if (!this.styleElement) return;
+    if (document.head.contains(this.styleElement)) {
+      document.head.removeChild(this.styleElement);
+    }
+    this.styleElement = null;
+  }
+
+  private unbindPlayButtons(): void {
+    for (const bound of this.boundPlayButtons) {
+      bound.element.removeEventListener('click', bound.handler);
+    }
+    this.boundPlayButtons = [];
+  }
+
+  private clearActiveAd(): void {
+    if (typeof document === 'undefined') return;
+    const overlay = document.querySelector('.gendis-ad-overlay');
+    if (overlay && document.body.contains(overlay)) {
+      document.body.removeChild(overlay);
+    }
   }
 
   public showPreRoll(onComplete?: () => void): void {
@@ -255,8 +250,8 @@ export class GendisSDKClass {
     const duration = this.serverAdConfig?.adDuration ?? this.config?.adDuration ?? 5;
     let timeLeft = duration;
 
-    // Record impression event
-    void this.sendTelemetry('IMPRESSION');
+    // Record impression event (non-blocking)
+    this.sendTelemetry('IMPRESSION');
 
     // Create Overlay elements
     const overlay = document.createElement('div');
@@ -338,14 +333,15 @@ export class GendisSDKClass {
       }
     }, 1000);
 
-    // Close function
+    // Close function — always clears the interval & removes the overlay
     const closeAd = () => {
       clearInterval(interval);
+      button.removeEventListener('click', closeAd);
       if (document.body.contains(overlay)) {
         document.body.removeChild(overlay);
       }
-      // Record click event
-      void this.sendTelemetry('CLICK');
+      // Record click event (non-blocking)
+      this.sendTelemetry('CLICK');
       if (this.config?.debug) {
         console.log('[GendisSDK] Pre-Roll Ad completed and overlay removed.');
       }
@@ -359,8 +355,9 @@ export class GendisSDKClass {
 
   /**
    * Helper to bind a Play button click to intercept with an ad before triggering game load.
+   * Returns an unbind function for manual cleanup.
    */
-  public bindPlayButton(buttonSelector: string | HTMLElement, onComplete: () => void): void {
+  public bindPlayButton(buttonSelector: string | HTMLElement, onComplete: () => void): (() => void) | void {
     if (typeof document === 'undefined') return;
 
     let element: HTMLElement | null = null;
@@ -375,13 +372,25 @@ export class GendisSDKClass {
       return;
     }
 
-    element.addEventListener('click', (e) => {
+    const handler = (e: Event) => {
       e.preventDefault();
       if (this.config?.debug) {
         console.log('[GendisSDK] Play button clicked. Showing ad first...');
       }
       this.showPreRoll(onComplete);
-    });
+    };
+
+    element.addEventListener('click', handler);
+    const bound: BoundPlayButton = { element, handler };
+    this.boundPlayButtons.push(bound);
+
+    return () => {
+      const index = this.boundPlayButtons.indexOf(bound);
+      if (index !== -1) {
+        this.boundPlayButtons.splice(index, 1);
+      }
+      element.removeEventListener('click', handler);
+    };
   }
 }
 

@@ -36,7 +36,12 @@ function getDb(): Database.Database {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
   db = new Database(dbPath);
+  // WAL mode: concurrent readers + single writer without blocking, and
+  // avoids 'database is locked' errors under high write concurrency.
   db.pragma('journal_mode = WAL');
+  db.pragma('synchronous = NORMAL');
+  // Wait up to 5s instead of throwing immediately on lock contention.
+  db.pragma('busy_timeout = 5000');
   db.exec(`
     CREATE TABLE IF NOT EXISTS telemetry_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

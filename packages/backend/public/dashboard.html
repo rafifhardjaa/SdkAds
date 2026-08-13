@@ -7,15 +7,40 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #0b1120;
-      color: #e5e7eb;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: #09090B;
+      color: #FAFAFA;
       min-height: 100vh;
       padding: 24px;
     }
     .container { max-width: 960px; margin: 0 auto; }
-    h1 { font-size: 24px; margin-bottom: 4px; }
-    .subtitle { color: #9ca3af; font-size: 14px; margin-bottom: 24px; }
+    .head { display: flex; align-items: center; gap: 12px; padding: 4px 0 10px; }
+    h1 { font-size: 22px; font-weight: 700; color: #FAFAFA; letter-spacing: -0.01em; }
+    .live {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.12);
+      color: #10B981;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-radius: 9999px;
+      padding: 3px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .live .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #10B981;
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .subtitle { color: #A1A1AA; font-size: 14px; margin-bottom: 24px; }
     .toolbar {
       display: flex;
       gap: 12px;
@@ -23,28 +48,35 @@
       margin-bottom: 24px;
       flex-wrap: wrap;
     }
-    label { font-size: 13px; color: #9ca3af; }
+    label { font-size: 13px; font-weight: 600; color: #E4E4E7; }
     input[type="text"] {
-      background: #1f2937;
-      border: 1px solid #374151;
-      color: #e5e7eb;
+      background: #18181B;
+      border: 1px solid #27272A;
       border-radius: 6px;
-      padding: 8px 12px;
+      color: #FAFAFA;
+      padding: 10px 12px;
       font-size: 14px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       min-width: 220px;
+      outline: none;
+      transition: border-color 0.15s ease;
     }
+    input[type="text"]:focus { border-color: #10B981; }
     button {
-      background: #3b82f6;
-      color: #fff;
-      border: none;
+      background: #FAFAFA;
+      color: #09090B;
+      border: 1px solid #27272A;
       border-radius: 6px;
-      padding: 8px 16px;
+      padding: 10px 18px;
       font-size: 14px;
       font-weight: 600;
+      font-family: inherit;
       cursor: pointer;
+      transition: background 0.15s ease;
     }
-    button:hover { background: #2563eb; }
-    .status { font-size: 13px; color: #fbbf24; }
+    button:hover { background: #E4E4E7; }
+    .status { font-size: 12px; color: #A1A1AA; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .status.error { color: #F87171; }
     .cards {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -52,49 +84,53 @@
       margin-bottom: 24px;
     }
     .card {
-      background: #111827;
-      border: 1px solid #1f2937;
-      border-radius: 12px;
+      background: #18181B;
+      border: 1px solid #27272A;
+      border-radius: 8px;
       padding: 20px;
     }
-    .card .value { font-size: 32px; font-weight: 700; }
-    .card .label { font-size: 13px; color: #9ca3af; margin-top: 4px; }
-    .card .value.blue { color: #3b82f6; }
-    .card .value.green { color: #22c55e; }
-    .card .value.amber { color: #f59e0b; }
+    .card .value { font-size: 32px; font-weight: 700; color: #FAFAFA; letter-spacing: -0.02em; }
+    .card.imp .value { color: #10B981; }
+    .card .label { font-size: 13px; color: #A1A1AA; margin-top: 4px; font-weight: 500; }
     .panel {
-      background: #111827;
-      border: 1px solid #1f2937;
-      border-radius: 12px;
+      background: #18181B;
+      border: 1px solid #27272A;
+      border-radius: 8px;
       padding: 20px;
       margin-bottom: 24px;
     }
-    .panel h2 { font-size: 16px; margin-bottom: 16px; }
+    .panel h2 { font-size: 15px; font-weight: 600; color: #FAFAFA; margin-bottom: 16px; letter-spacing: -0.01em; }
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
-    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #1f2937; }
-    th { color: #9ca3af; font-weight: 600; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #27272A; color: #E4E4E7; }
+    th { color: #A1A1AA; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+    td.game-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #FAFAFA; }
+    tr:last-child td { border-bottom: none; }
+    td.imp-cell { color: #10B981; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
     .chart { display: flex; align-items: flex-end; gap: 24px; height: 160px; }
     .bar-group { flex: 1; text-align: center; }
     .bar-row { display: flex; align-items: flex-end; justify-content: center; gap: 8px; height: 120px; }
     .bar {
       width: 36px;
-      border-radius: 6px 6px 0 0;
-      min-height: 2px;
+      min-height: 4px;
+      border-radius: 4px 4px 0 0;
       transition: height 0.4s ease;
     }
-    .bar.imp { background: #3b82f6; }
-    .bar.clk { background: #22c55e; }
-    .bar-label { font-size: 12px; color: #9ca3af; margin-top: 8px; }
-    .legend { display: flex; gap: 16px; justify-content: center; margin-top: 12px; font-size: 13px; }
+    .bar.imp { background: #10B981; }
+    .bar.clk { background: #3B82F6; }
+    .bar-label { font-size: 12px; color: #A1A1AA; margin-top: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .legend { display: flex; gap: 20px; justify-content: center; margin-top: 14px; font-size: 13px; color: #A1A1AA; }
     .legend span { display: flex; align-items: center; gap: 6px; }
     .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
-    .swatch.imp { background: #3b82f6; }
-    .swatch.clk { background: #22c55e; }
+    .swatch.imp { background: #10B981; }
+    .swatch.clk { background: #3B82F6; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>SDK Ads Dashboard</h1>
+    <div class="head">
+      <h1>SDK Ads Dashboard</h1>
+      <span class="live"><span class="dot"></span>Live</span>
+    </div>
     <div class="subtitle">Real-time statistik impresi &amp; klik per developer/game</div>
 
     <div class="toolbar">
@@ -105,9 +141,9 @@
     </div>
 
     <div class="cards">
-      <div class="card"><div class="value blue" id="totalImp">-</div><div class="label">Total Impressions</div></div>
-      <div class="card"><div class="value green" id="totalClk">-</div><div class="label">Total Clicks</div></div>
-      <div class="card"><div class="value amber" id="ctr">-</div><div class="label">CTR</div></div>
+      <div class="card imp"><div class="value" id="totalImp">-</div><div class="label">Total Impressions</div></div>
+      <div class="card"><div class="value" id="totalClk">-</div><div class="label">Total Clicks</div></div>
+      <div class="card"><div class="value" id="ctr">-</div><div class="label">CTR</div></div>
     </div>
 
     <div class="panel">
@@ -139,10 +175,12 @@
 
       if (!apiKey) {
         status.textContent = 'Masukkan developer key';
+        status.className = 'status error';
         return;
       }
 
       status.textContent = 'Memuat...';
+      status.className = 'status';
 
       try {
         const res = await fetch('/api/stats', {
@@ -152,6 +190,7 @@
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           status.textContent = 'Error: ' + (err.error || res.status);
+          status.className = 'status error';
           return;
         }
 
@@ -166,8 +205,8 @@
         stats.games.forEach((g) => {
           const row = document.createElement('tr');
           row.innerHTML =
-            '<td>' + g.gameId + '</td>' +
-            '<td>' + g.impressions + '</td>' +
+            '<td class="game-id">' + g.gameId + '</td>' +
+            '<td class="imp-cell">' + g.impressions + '</td>' +
             '<td>' + g.clicks + '</td>' +
             '<td>' + (g.ctr * 100).toFixed(2) + '%</td>';
           tbody.appendChild(row);
@@ -175,8 +214,10 @@
 
         renderChart(stats.games);
         status.textContent = 'Auto-refresh ' + (REFRESH_MS / 1000) + 's - terakhir ' + new Date().toLocaleTimeString();
+        status.className = 'status';
       } catch (err) {
         status.textContent = 'Error: ' + err.message;
+        status.className = 'status error';
       }
     }
 

@@ -9,6 +9,7 @@ export interface Developer {
   name: string;
   apiKey: string;
   games: Game[];
+  allowedOrigins: string[];
 }
 
 export interface AdConfig {
@@ -22,6 +23,11 @@ const developers: Developer[] = [
     id: 'dev-demo',
     name: 'Demo Developer',
     apiKey: 'dev-key-demo',
+    allowedOrigins: [
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+      'http://localhost:8080',
+    ],
     games: [
       {
         gameId: 'demo-game',
