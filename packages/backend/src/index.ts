@@ -1,11 +1,7 @@
-import express, { Express, Request, Response } from 'express';
+import express, { Express, Response } from 'express';
 import cors from 'cors';
-
-interface AdConfig {
-  gameId: string;
-  adDuration: number;
-  placementId: string;
-}
+import { authenticateDeveloper, AuthenticatedRequest } from './middleware';
+import { findGameForDeveloper } from './store';
 
 interface TelemetryEvent {
   gameId?: string;
@@ -14,28 +10,18 @@ interface TelemetryEvent {
   timestamp?: string | number;
 }
 
-const DEFAULT_AD_DURATION = 5;
-const DEFAULT_PLACEMENT_ID = 'pre-roll';
-
-const DEFAULT_CONFIGS: Record<string, AdConfig> = {
-  'demo-game': {
-    gameId: 'demo-game',
-    adDuration: DEFAULT_AD_DURATION,
-    placementId: DEFAULT_PLACEMENT_ID,
-  },
-};
-
 const app: Express = express();
 app.use(cors());
 app.use(express.json());
 
-app.get('/health', (_req: Request, res: Response) => {
+app.get('/health', (_req, res: Response) => {
   res.json({ status: 'ok', uptime: process.uptime() });
 });
 
-app.get('/api/config', (req: Request, res: Response) => {
+app.get('/api/config', authenticateDeveloper, (req: AuthenticatedRequest, res: Response) => {
+  const developer = req.developer!;
   const gameId = String(req.query.gameId || '');
-  const config = DEFAULT_CONFIGS[gameId];
+  const config = findGameForDeveloper(developer, gameId);
 
   if (!config) {
     res.status(404).json({ error: 'Game not found', gameId });
@@ -45,7 +31,8 @@ app.get('/api/config', (req: Request, res: Response) => {
   res.json(config);
 });
 
-app.post('/api/telemetry', (req: Request, res: Response) => {
+app.post('/api/telemetry', authenticateDeveloper, (req: AuthenticatedRequest, res: Response) => {
+  const developer = req.developer!;
   const body: TelemetryEvent = req.body ?? {};
 
   if (!body.gameId || !body.type) {
@@ -53,8 +40,14 @@ app.post('/api/telemetry', (req: Request, res: Response) => {
     return;
   }
 
+  if (!findGameForDeveloper(developer, body.gameId)) {
+    res.status(403).json({ error: 'Forbidden: game not owned by developer' });
+    return;
+  }
+
   const event = {
     ...body,
+    developerId: developer.id,
     timestamp: body.timestamp || Date.now(),
   };
 

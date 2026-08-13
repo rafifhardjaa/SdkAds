@@ -26,4 +26,13 @@
 - [x] Bundle SDK tetap ringan: `sdk.min.js` = 7.23 KB (< 8 KB).
 
 ### Next Tasks
-- [ ] Penambahan dukungan multi-tenant developer key (auth header) penuh di backend (validasi per key).
+- [ ] Setup basis data telemetry (Redis/PostgreSQL) & dashboard stats real-time.
+
+### Multi-Tenant Auth Phase
+- [x] `packages/backend/src/store.ts`: store developer & game in-memory (multi-tenant), lookup by `apiKey`.
+- [x] `packages/backend/src/middleware.ts`: middleware `authenticateDeveloper` membaca `Authorization: Bearer` → 401 jika kosong/invalid.
+- [x] `GET /api/config` & `POST /api/telemetry` kini terproteksi (tanpa `/health`).
+- [x] Validasi kepemilikan game per developer: game asing → 404 (config) / 403 (telemetry).
+- [x] Event telemetri ditandai `developerId` sesuai developer yang terautentikasi.
+- [x] Verifikasi 7 skenario auth (no key, invalid key, valid+own, valid+foreign, telemetry no-key) — semua response benar.
+- [x] Build backend CJS 3.53 KB.
