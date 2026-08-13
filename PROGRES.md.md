@@ -26,7 +26,18 @@
 - [x] Bundle SDK tetap ringan: `sdk.min.js` = 7.23 KB (< 8 KB).
 
 ### Next Tasks
-- [ ] Migrasi store telemetry ke database persistent (Redis/PostgreSQL/SQLite) & dashboard stats real-time.
+- [ ] Deploy pipeline ke Cloudflare CDN & VPS, plus Redis untuk high-concurrency logging.
+
+### Persistent DB & Dashboard Phase
+- [x] Instal `better-sqlite3` (native, prebuilt) + `@types/better-sqlite3` di `packages/backend`.
+- [x] Migrasi `telemetry.ts`: dari in-memory ke SQLite (file `data/telemetry.db`, WAL mode, tabel `telemetry_events` + index developer/game).
+- [x] `recordEvent` → `INSERT`, `getStats` → agregasi SQL `GROUP BY game_id, type` (tetap return `StatsSummary` yang sama).
+- [x] `placementId` di-default ke `'pre-roll'` pada endpoint bila body tidak menyertakannya.
+- [x] Dashboard GUI `packages/backend/public/dashboard.html` — served di `GET /dashboard`, fetch `/api/stats` dengan Bearer key, auto-refresh 5s, kartu total (impressions/clicks/CTR), tabel & grafik batang per game.
+- [x] Build script tsup ditambah `--publicDir public` agar `dashboard.html` ikut ke `dist/`.
+- [x] Verifikasi persistence: kirim 4 IMPRESSION + 2 CLICK → stats tampil sebelum restart, data tetap ada setelah restart server.
+- [x] `.gitignore` ditambah `data/` (runtime DB).
+- [x] Build backend CJS 6.62 KB.
 
 ### Telemetry Persistence & Stats Phase
 - [x] `packages/backend/src/telemetry.ts`: in-memory store terstruktur untuk event telemetri (`recordEvent`, `getStats`).

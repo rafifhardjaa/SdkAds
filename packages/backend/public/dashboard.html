@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SDK Ads Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0b1120;
+      color: #e5e7eb;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 24px; margin-bottom: 4px; }
+    .subtitle { color: #9ca3af; font-size: 14px; margin-bottom: 24px; }
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    label { font-size: 13px; color: #9ca3af; }
+    input[type="text"] {
+      background: #1f2937;
+      border: 1px solid #374151;
+      color: #e5e7eb;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 14px;
+      min-width: 220px;
+    }
+    button {
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { background: #2563eb; }
+    .status { font-size: 13px; color: #fbbf24; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .card .value { font-size: 32px; font-weight: 700; }
+    .card .label { font-size: 13px; color: #9ca3af; margin-top: 4px; }
+    .card .value.blue { color: #3b82f6; }
+    .card .value.green { color: #22c55e; }
+    .card .value.amber { color: #f59e0b; }
+    .panel {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+    .panel h2 { font-size: 16px; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #1f2937; }
+    th { color: #9ca3af; font-weight: 600; }
+    .chart { display: flex; align-items: flex-end; gap: 24px; height: 160px; }
+    .bar-group { flex: 1; text-align: center; }
+    .bar-row { display: flex; align-items: flex-end; justify-content: center; gap: 8px; height: 120px; }
+    .bar {
+      width: 36px;
+      border-radius: 6px 6px 0 0;
+      min-height: 2px;
+      transition: height 0.4s ease;
+    }
+    .bar.imp { background: #3b82f6; }
+    .bar.clk { background: #22c55e; }
+    .bar-label { font-size: 12px; color: #9ca3af; margin-top: 8px; }
+    .legend { display: flex; gap: 16px; justify-content: center; margin-top: 12px; font-size: 13px; }
+    .legend span { display: flex; align-items: center; gap: 6px; }
+    .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+    .swatch.imp { background: #3b82f6; }
+    .swatch.clk { background: #22c55e; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>SDK Ads Dashboard</h1>
+    <div class="subtitle">Real-time statistik impresi &amp; klik per developer/game</div>
+
+    <div class="toolbar">
+      <label for="apiKey">Developer Key</label>
+      <input type="text" id="apiKey" value="dev-key-demo" autocomplete="off" />
+      <button id="refreshBtn">Refresh</button>
+      <span class="status" id="status"></span>
+    </div>
+
+    <div class="cards">
+      <div class="card"><div class="value blue" id="totalImp">-</div><div class="label">Total Impressions</div></div>
+      <div class="card"><div class="value green" id="totalClk">-</div><div class="label">Total Clicks</div></div>
+      <div class="card"><div class="value amber" id="ctr">-</div><div class="label">CTR</div></div>
+    </div>
+
+    <div class="panel">
+      <h2>Statistik per Game</h2>
+      <table>
+        <thead>
+          <tr><th>Game ID</th><th>Impressions</th><th>Clicks</th><th>CTR</th></tr>
+        </thead>
+        <tbody id="statsBody"></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h2>Grafik Perbandingan</h2>
+      <div class="chart" id="chart"></div>
+      <div class="legend">
+        <span><span class="swatch imp"></span>Impressions</span>
+        <span><span class="swatch clk"></span>Clicks</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const REFRESH_MS = 5000;
+
+    async function loadStats() {
+      const status = document.getElementById('status');
+      const apiKey = document.getElementById('apiKey').value.trim();
+
+      if (!apiKey) {
+        status.textContent = 'Masukkan developer key';
+        return;
+      }
+
+      status.textContent = 'Memuat...';
+
+      try {
+        const res = await fetch('/api/stats', {
+          headers: { 'Authorization': 'Bearer ' + apiKey },
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          status.textContent = 'Error: ' + (err.error || res.status);
+          return;
+        }
+
+        const stats = await res.json();
+
+        document.getElementById('totalImp').textContent = stats.totalImpressions;
+        document.getElementById('totalClk').textContent = stats.totalClicks;
+        document.getElementById('ctr').textContent = (stats.ctr * 100).toFixed(2) + '%';
+
+        const tbody = document.getElementById('statsBody');
+        tbody.innerHTML = '';
+        stats.games.forEach((g) => {
+          const row = document.createElement('tr');
+          row.innerHTML =
+            '<td>' + g.gameId + '</td>' +
+            '<td>' + g.impressions + '</td>' +
+            '<td>' + g.clicks + '</td>' +
+            '<td>' + (g.ctr * 100).toFixed(2) + '%</td>';
+          tbody.appendChild(row);
+        });
+
+        renderChart(stats.games);
+        status.textContent = 'Auto-refresh ' + (REFRESH_MS / 1000) + 's - terakhir ' + new Date().toLocaleTimeString();
+      } catch (err) {
+        status.textContent = 'Error: ' + err.message;
+      }
+    }
+
+    function renderChart(games) {
+      const chart = document.getElementById('chart');
+      chart.innerHTML = '';
+
+      const max = Math.max(1, ...games.map((g) => Math.max(g.impressions, g.clicks)));
+
+      games.forEach((g) => {
+        const group = document.createElement('div');
+        group.className = 'bar-group';
+
+        const row = document.createElement('div');
+        row.className = 'bar-row';
+
+        const imp = document.createElement('div');
+        imp.className = 'bar imp';
+        imp.style.height = (g.impressions / max) * 100 + '%';
+        imp.title = g.gameId + ' impressions: ' + g.impressions;
+
+        const clk = document.createElement('div');
+        clk.className = 'bar clk';
+        clk.style.height = (g.clicks / max) * 100 + '%';
+        clk.title = g.gameId + ' clicks: ' + g.clicks;
+
+        row.appendChild(imp);
+        row.appendChild(clk);
+
+        const label = document.createElement('div');
+        label.className = 'bar-label';
+        label.textContent = g.gameId;
+
+        group.appendChild(row);
+        group.appendChild(label);
+        chart.appendChild(group);
+      });
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', loadStats);
+    document.getElementById('apiKey').addEventListener('change', loadStats);
+    loadStats();
+    setInterval(loadStats, REFRESH_MS);
+  </script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 import express, { Express, Response } from 'express';
 import cors from 'cors';
+import path from 'path';
 import { authenticateDeveloper, AuthenticatedRequest } from './middleware';
 import { findGameForDeveloper } from './store';
 import { getStats, recordEvent } from './telemetry';
@@ -14,6 +15,12 @@ interface TelemetryEvent {
 const app: Express = express();
 app.use(cors());
 app.use(express.json());
+
+app.use(express.static(path.join(__dirname)));
+
+app.get('/dashboard', (_req, res: Response) => {
+  res.sendFile(path.join(__dirname, 'dashboard.html'));
+});
 
 app.get('/health', (_req, res: Response) => {
   res.json({ status: 'ok', uptime: process.uptime() });
@@ -49,6 +56,7 @@ app.post('/api/telemetry', authenticateDeveloper, (req: AuthenticatedRequest, re
   const event = {
     ...body,
     developerId: developer.id,
+    placementId: body.placementId || 'pre-roll',
     timestamp: body.timestamp || Date.now(),
   };
 
